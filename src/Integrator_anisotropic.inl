@@ -30,6 +30,8 @@
 #include <hydra/Function.h>
 #include <hydra/FunctorArithmetic.h>
 #include <hydra/Plain.h>
+#include <hydra/VegasState.h>
+#include <hydra/Vegas.h>
 #include <hydra/Lambda.h>
 #include <hydra/host/System.h>
 #include <hydra/device/System.h>
@@ -70,7 +72,10 @@ int main(int argv, char** argc)
     constexpr double rho0   = 1.225;
     constexpr double L      = 1E4;
     constexpr double T0     = 300.;
-    int Ncalls = (int) cfg_root["Ncalls"];
+    
+    int Ncalls       = (int) cfg_root["Ncalls"];
+    int Niterations  = (int) cfg_root["Niterations"];
+    double MaxError  = (double) cfg_root["MaxError"];
     
     
     // physics parameters
@@ -101,6 +106,19 @@ int main(int argv, char** argc)
     double  max[Ndim]   = { max_x3,     max_z,  max_k  };
     
     
+    // Vegas integrator state
+    auto integrator = hydra::VegasState<Ndim,  hydra::device::sys_t>(min,max);
+    integrator.SetAlpha(1.5);
+    integrator.SetIterations( Niterations );
+    integrator.SetUseRelativeError(1);
+    integrator.SetMaxError( MaxError );
+    integrator.SetCalls( Ncalls );
+    integrator.SetNDimensions(Ndim);
+    integrator.SetMode(-1);
+    integrator.SetTrainingCalls( 50000/10 );
+    integrator.SetTrainingIterations( Niterations );
+    
+    
 
     for(int i=0; i<Npoints; ++i){
     
@@ -113,14 +131,14 @@ int main(int argv, char** argc)
         // Integrand
         auto integrand = SgAnisotropic<X3_t, Z_t, K_t>(par);
         
+        auto Vegas_d = hydra::Vegas< Ndim,  hydra::device::sys_t >(integrator);
+        
+        auto result  = Vegas_d.Integrate(integrand);
+        
 
         // Integral
-        
-        auto integrator = hydra::Plain< Ndim,  hydra::device::sys_t >(min, max, Ncalls);
 
-        auto result     = integrator.Integrate(integrand);
-
-        std::cout << "Result: " << sqrt(scale*result.first) << std::endl;
+        std::cout << sqrt(scale*result.first) << std::endl;
         
     }
 

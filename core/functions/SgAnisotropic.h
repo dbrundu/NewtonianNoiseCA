@@ -139,6 +139,10 @@ public:
         LDouble r0     = _par[4];
         LDouble u_star = _par[5];
         
+        //LDouble c = 200. ; // up to 200
+        //LDouble cutoff = sqrt( std::max((LDouble)0.0 , (LDouble) 1. - ( c/(2.*k*r0 )) ) );
+        //if(z<cutoff) return 0.0;
+        
 	    LDouble p           = sqrt(1.0 - z*z);
 
 	    //LDouble L_x3        = std::max(x3, delta);
