@@ -11,7 +11,7 @@ function(ADD_TARGET target_name)
                    "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cu"    
                     OPTIONS -Xcompiler -DHYDRA_DEVICE_SYSTEM=CUDA -DHYDRA_HOST_SYSTEM=CPP)
                     
-                  target_link_libraries("${target_name}_cuda" ${ROOT_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES}  ${GSL_LIBRARIES} ${FFTW_LIBRARIES})
+                  target_link_libraries("${target_name}_cuda" ${LIBCONFIG_CPP_LIBRARIES})
           
                 
         endif(BUILD_CUDA_TARGETS)
@@ -28,7 +28,7 @@ function(ADD_TARGET target_name)
                  set_target_properties( "${target_name}_tbb" 
                   PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=TBB")
                     
-                 target_link_libraries( "${target_name}_tbb" ${ROOT_LIBRARIES} ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES} ${GSL_LIBRARIES} ${FFTW_LIBRARIES})
+                 target_link_libraries( "${target_name}_tbb" ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
                    
                        
          endif(BUILD_TBB_TARGETS)
@@ -45,7 +45,7 @@ function(ADD_TARGET target_name)
                  set_target_properties( "${target_name}_cpp" 
                   PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=CPP")
                     
-                 target_link_libraries( "${target_name}_cpp" ${ROOT_LIBRARIES} ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES} ${GSL_LIBRARIES}  ${FFTW_LIBRARIES})
+                 target_link_libraries( "${target_name}_cpp" ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
               
                        
          endif(BUILD_CPP_TARGETS)
@@ -63,7 +63,7 @@ function(ADD_TARGET target_name)
                  set_target_properties( "${target_name}_omp" 
                   PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=OMP ${OpenMP_CXX_FLAGS}")
                     
-                 target_link_libraries( "${target_name}_omp" ${ROOT_LIBRARIES} ${OpenMP_CXX_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES} ${GSL_LIBRARIES} ${FFTW_LIBRARIES})
+                 target_link_libraries( "${target_name}_omp" ${OpenMP_CXX_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
                    
                        
          endif(BUILD_OMP_TARGETS)

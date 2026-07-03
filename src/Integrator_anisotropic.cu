@@ -4,5 +4,4 @@
  */
 
 
-
 #include <src/Integrator_anisotropic.inl>

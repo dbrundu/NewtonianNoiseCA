@@ -7,7 +7,7 @@
 #define MYUTILS_H_
 
 
-template <typename T> 
+template <typename T>
 int sgn(T val) {
     return (T(0) < val) - (val < T(0));
 }

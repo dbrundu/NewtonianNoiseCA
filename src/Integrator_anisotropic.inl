@@ -44,8 +44,6 @@
 #include <core/functions/SgIsotropic.h>
 
 
-
-
 declarg(X3_t,  LDouble)
 declarg(Z_t,   LDouble)
 declarg(K_t,   LDouble)
@@ -54,30 +52,52 @@ using namespace hydra::arguments;
 namespace libconf = libconfig;
 
 
-
-
-
-int main(int argv, char** argc)
+int main(int argc, char** argv)
 {
+
+    // command line: path to the configuration file (defaults to the etc/ copy)
+    std::string cfg_path = "../etc/configuration_anisotropic.cfg";
+    try {
+        TCLAP::CmdLine cmd("NewtonianNoiseCA anisotropic integrator", ' ', "1.0");
+        TCLAP::ValueArg<std::string> cfgArg("c", "config",
+            "Path to the libconfig configuration file", false, cfg_path, "path", cmd);
+        cmd.parse(argc, argv);
+        cfg_path = cfgArg.getValue();
+    }
+    catch (TCLAP::ArgException& e) {
+        std::cerr << "Command-line error: " << e.error() << " for arg " << e.argId() << std::endl;
+        return 1;
+    }
 
     // get configuration
     libconf::Config Cfg;
-    Cfg.readFile("../etc/configuration_anisotropic.cfg");
+    try {
+        Cfg.readFile(cfg_path.c_str());
+    }
+    catch (const libconf::FileIOException&) {
+        std::cerr << "Could not read configuration file: " << cfg_path << std::endl;
+        return 1;
+    }
+    catch (const libconf::ParseException& e) {
+        std::cerr << "Parse error in " << e.getFile() << ":" << e.getLine()
+                  << " - " << e.getError() << std::endl;
+        return 1;
+    }
     const libconf::Setting& cfg_root  = Cfg.getRoot();
-    
-    
-    // constants 
+
+
+    // constants
     constexpr size_t Ndim   = 3;
     constexpr double G      = 6.67e-11;
     constexpr double rho0   = 1.225;
     constexpr double L      = 1E4;
     constexpr double T0     = 300.;
-    
+
     int Ncalls       = (int) cfg_root["Ncalls"];
     int Niterations  = (int) cfg_root["Niterations"];
     double MaxError  = (double) cfg_root["MaxError"];
-    
-    
+
+
     // physics parameters
     auto par = SgAnisotropicParams();
     par.omega        = 2*M_PI;
@@ -86,26 +106,26 @@ int main(int argv, char** argc)
     par.psi          = (double) cfg_root["psi"];
     par.r0           = (double) cfg_root["r0"];
     par.u_star       = (double) cfg_root["u_star"];
-    
+
     double min_x3    = (double) cfg_root["min_x3"];
     double max_x3    = (double) cfg_root["max_x3"];
-    
+
     double min_z     = (double) cfg_root["min_z"];
     double max_z     = (double) cfg_root["max_z"];
-    
+
     double min_k     = (double) cfg_root["min_k"];
     double max_k     = (double) cfg_root["max_k"];
-    
+
     double omega_min = (double) cfg_root["omega_min"];
     double omega_max = (double) cfg_root["omega_max"];
     int    Npoints   = (int)    cfg_root["Npoints"];
-    
-    
+
+
     //integration region limits
     double  min[Ndim]   = { par.delta , min_z , min_k };
     double  max[Ndim]   = { max_x3,     max_z,  max_k  };
-    
-    
+
+
     // Vegas integrator state
     auto integrator = hydra::VegasState<Ndim,  hydra::device::sys_t>(min,max);
     integrator.SetAlpha(1.5);
@@ -117,29 +137,28 @@ int main(int argv, char** argc)
     integrator.SetMode(-1);
     integrator.SetTrainingCalls( 50000/10 );
     integrator.SetTrainingIterations( Niterations );
-    
-    
+
 
     for(int i=0; i<Npoints; ++i){
-    
+
         double omega = omega_min + i * (omega_max-omega_min)/(Npoints-1.0);
         par.omega = omega;
-    
-        double scale  = G * rho0 / (omega * omega * L * T0); 
+
+        double scale  = G * rho0 / (omega * omega * L * T0);
         scale *= scale;
 
         // Integrand
         auto integrand = SgAnisotropic<X3_t, Z_t, K_t>(par);
-        
+
         auto Vegas_d = hydra::Vegas< Ndim,  hydra::device::sys_t >(integrator);
-        
+
         auto result  = Vegas_d.Integrate(integrand);
-        
+
 
         // Integral
 
         std::cout << sqrt(scale*result.first) << std::endl;
-        
+
     }
 
     return 0;
@@ -148,13 +167,4 @@ int main(int argv, char** argc)
 }
 
 
-
-
-
-
-
-
-
-
-
-#endif 
+#endif

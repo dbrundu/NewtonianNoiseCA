@@ -1,6 +1,6 @@
-### CMakeList for NewtonianNoiseCA examples and documentation
+### CMakeList for NewtonianNoiseCA
 
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.16)
 
 # project name
 project(NewtonianNoiseCA)
@@ -15,78 +15,48 @@ SET(TFBOOST_CMAKE_DIR "${PROJECT_SOURCE_DIR}/cmake")
 SET(CMAKE_MODULE_PATH "${TFBOOST_CMAKE_DIR}" ${CMAKE_MODULE_PATH})
 SET(CMAKE_VERBOSE_MAKEFILE  ON)
 
-#check if compiler is C++14 compliant
+#check if compiler is C++20 compliant
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("--std=c++14" COMPILER_SUPPORTS_CXX14)
-if(NOT COMPILER_SUPPORTS_CXX14)
-  message(FATAL "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
+CHECK_CXX_COMPILER_FLAG("--std=c++20" COMPILER_SUPPORTS_CXX20)
+if(NOT COMPILER_SUPPORTS_CXX20)
+  message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++20 support. Please use a different C++ compiler.")
 endif()
 
 #compiler flags
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 
  MESSAGE(STATUS "Setting Clang flags")
- set(CMAKE_CXX_FLAGS " --std=c++14 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
-  
+ set(CMAKE_CXX_FLAGS " --std=c++20 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
+
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 
  MESSAGE(STATUS "Setting GCC flags")
- set(CMAKE_CXX_FLAGS " --std=c++14 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
+ set(CMAKE_CXX_FLAGS " --std=c++20 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
 
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
- 
+
  MESSAGE(STATUS "Setting ICC flags")
- set(CMAKE_CXX_FLAGS " --std=c++14 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
-  
+ set(CMAKE_CXX_FLAGS " --std=c++20 -W -march=native -fPIC -O3 -funroll-loops -ldl" CACHE STRING "compile flags" FORCE)
+
 #elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
  #MESSAGE(STATUS "===> Compiling with MSVC")
 endif()
 
-# get Hydra
+# get Hydra (>= v4.0, header only)
 find_package(Hydra REQUIRED)
 include_directories(${HYDRA_INCLUDE_DIR})
 
-# get TCLAP
+# get TCLAP (header only)
 find_package(TCLAP REQUIRED)
 include_directories(${TCLAP_INCLUDE_DIR})
 
-# get ROOT
-find_package(ROOT COMPONENTS Minuit2 TreePlayer)
-if(ROOT_FOUND)
-  include_directories(${ROOT_INCLUDE_DIR})
-  link_directories(${ROOT_LIBRARY_DIR})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_ROOT_AVAILABLE_")
-  if(${ROOT_Minuit2_LIBRARY} MATCHES "libMinuit2.so")
-    set(Minuit2_FOUND ON)
-  else(Minuit2_FOUND OFF)
-  endif()
-endif(ROOT_FOUND)
-
-#-----------------------
-# get GSL
-find_package(GSL REQUIRED)
-include_directories(${GSL_INCLUDE_DIRS})
-link_directories(${GSL_LIBRARIES})
-
-#-----------------------
-# get FFTW for convolution examples
-find_package(FFTW)
-if(FFTW_FOUND)
-include_directories(${FFTW_INCLUDE_DIRS})
-endif(FFTW_FOUND)
-
-# get libconfig
-find_package(LibConfig REQUIRED) 
+# get libconfig (used to read the .cfg configuration files)
+find_package(LibConfig REQUIRED)
 include_directories(${LIBCONFIG_CPP_INCLUDE_DIR})
 link_directories(${LIBCONFIG_CPP_LIBRARIES})
 
-
-
-
-
-
 #get CUDA
-find_package(CUDA 8.0) 
+find_package(CUDA 8.0)
 if(CUDA_FOUND)
   link_directories( ${CUDA_TOOLKIT_ROOT_DIR}/lib64/)
 
@@ -125,10 +95,6 @@ if(OPENMP_CXX_FOUND OR OPENMP_FOUND)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif(OPENMP_CXX_FOUND OR OPENMP_FOUND)
 
-#generate API documentation with Doxygen
-find_package(Doxygen)
-option(BUILD_DOCUMENTATION "Create and install the HTML based API documentation (requires Doxygen)" NO)
-
 # examples etc
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -142,7 +108,7 @@ else()
   SET(BUILD_OMP_TARGETS  OFF)
 endif()
 
-#not every computer has a GPU and/or cuda installed or 
+#not every computer has a GPU and/or cuda installed
 if( CUDA_FOUND )
   SET(BUILD_CUDA_TARGETS  ON)
 else()
@@ -158,10 +124,6 @@ endif(TBB_FOUND)
 
 # messages
 MESSAGE(STATUS "TCLAP Include path: ${TCLAP_INCLUDE_DIR}")
-MESSAGE(STATUS "ROOT include path: ${ROOT_INCLUDE_DIR}")
-MESSAGE(STATUS "ROOT library path: ${ROOT_LIBRARY_DIR}" )
-MESSAGE(STATUS "ROOT libraries: ${ROOT_LIBRARIES}")
-MESSAGE(STATUS "ROOT::Minuit2: ${ROOT_Minuit2_LIBRARY}")
 MESSAGE(STATUS "Build CUDA/NVCC-based targets: ${BUILD_CUDA_TARGETS}")
 MESSAGE(STATUS "CUDA include: ${CUDA_INCLUDE_DIRS}" )
 MESSAGE(STATUS "CUDA libraries: ${CUDA_LIBRARIES}"  )
@@ -185,5 +147,3 @@ include(${TFBOOST_CMAKE_DIR}/AddExample.cmake)
 
 ADD_TARGET(Integrator_isotropic)
 ADD_TARGET(Integrator_anisotropic)
-
-

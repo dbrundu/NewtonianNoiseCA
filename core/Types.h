@@ -7,7 +7,7 @@
 #define MYTYPES_H_
 
 
-using LDouble   = long double;
+using LDouble   = double;
 
 
-#endif 
+#endif
