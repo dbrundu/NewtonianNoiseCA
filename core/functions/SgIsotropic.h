@@ -31,11 +31,11 @@
 struct SgIsotropicParams
 {
 
-    LDouble omega;
-    LDouble alpha;
-    LDouble psi;
-    LDouble r0;
-    LDouble u;
+    double omega;
+    double alpha;
+    double psi;
+    double r0;
+    double u;
 
 };
 
@@ -45,7 +45,7 @@ struct SgIsotropicParams
  *  @class Sg isotropic
  *
  */
-template< typename ArgTypePhi, typename ArgTypeP, typename ArgTypeK, typename Signature = LDouble(ArgTypePhi, ArgTypeP, ArgTypeK)>
+template< typename ArgTypePhi, typename ArgTypeP, typename ArgTypeK, typename Signature = double(ArgTypePhi, ArgTypeP, ArgTypeK)>
 class SgIsotropic: public hydra::BaseFunctor< SgIsotropic<ArgTypePhi, ArgTypeP, ArgTypeK>, Signature, 5>
 {
 
@@ -59,12 +59,12 @@ public:
 
     constexpr static int IDX  = 2;
 
-    SgIsotropic() : ThisBaseFunctor({(LDouble)2*M_PI,
-                                    (LDouble)1.0,
-                                    (LDouble)1.0,
-                                    (LDouble)0.0,
-                                    (LDouble)5.0,
-                                    (LDouble)10.0})
+    SgIsotropic() : ThisBaseFunctor({(double)2*M_PI,
+                                    (double)1.0,
+                                    (double)1.0,
+                                    (double)0.0,
+                                    (double)5.0,
+                                    (double)10.0})
     { }
 
 
@@ -113,14 +113,14 @@ public:
 
 
     __hydra_dual__ inline
-    LDouble Evaluate( ArgTypePhi phi, ArgTypeP p, ArgTypeK k )  const
+    double Evaluate( ArgTypePhi phi, ArgTypeP p, ArgTypeK k )  const
     {
 
-        LDouble omega  = _par[0];
-        LDouble alpha  = _par[1];
-        LDouble psi    = _par[2];
-        LDouble r0     = _par[3];
-        LDouble u      = _par[4];
+        double omega  = _par[0];
+        double alpha  = _par[1];
+        double psi    = _par[2];
+        double r0     = _par[3];
+        double u      = _par[4];
 
         double a = omega - k * u * p * cos(phi-psi);
 

@@ -1,71 +1,31 @@
+# Generate one executable per available backend from src/<target>.{cpp,cu}.
+# The host backends (CPP/TBB/OMP) share the same .cpp and differ only by the
+# Hydra device system; the CUDA backend compiles the .cu with nvcc.
 function(ADD_TARGET target_name)
-        message(STATUS "-----------")
-        #+++++++++++++++++++++++++
-        # CUDA TARGETS           |
-        #+++++++++++++++++++++++++
-        if(BUILD_CUDA_TARGETS)
-                  message(STATUS "Adding target ${target_name} to CUDA backend. Executable file name: ${target_name}_cuda")
-                  
-                  cuda_add_executable("${target_name}_cuda"
-                   #EXCLUDE_FROM_ALL 
-                   "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cu"    
-                    OPTIONS -Xcompiler -DHYDRA_DEVICE_SYSTEM=CUDA -DHYDRA_HOST_SYSTEM=CPP)
-                    
-                  target_link_libraries("${target_name}_cuda" ${LIBCONFIG_CPP_LIBRARIES})
-          
-                
-        endif(BUILD_CUDA_TARGETS)
-    
-        #+++++++++++++++++++++++++
-        # TBB TARGETS            |
-        #+++++++++++++++++++++++++
-        if(BUILD_TBB_TARGETS)
-                 message(STATUS "Adding target ${target_name} to TBB backend. Executable file name: ${target_name}_tbb")
-                 add_executable("${target_name}_tbb"
-                 # EXCLUDE_FROM_ALL
-                 "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cpp" )
-                    
-                 set_target_properties( "${target_name}_tbb" 
-                  PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=TBB")
-                    
-                 target_link_libraries( "${target_name}_tbb" ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
-                   
-                       
-         endif(BUILD_TBB_TARGETS)
-         
-        #+++++++++++++++++++++++++
-        # CPP TARGETS            |
-        #+++++++++++++++++++++++++
-        if(BUILD_CPP_TARGETS)
-                 message(STATUS "Adding target ${target_name} to CPP backend. Executable file name: ${target_name}_cpp")
-                 add_executable("${target_name}_cpp"
-                 # EXCLUDE_FROM_ALL 
-                 "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cpp" )
-                    
-                 set_target_properties( "${target_name}_cpp" 
-                  PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=CPP")
-                    
-                 target_link_libraries( "${target_name}_cpp" ${TBB_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
-              
-                       
-         endif(BUILD_CPP_TARGETS)
-         
-          
-        #+++++++++++++++++++++++++
-        # OMP TARGETS            |
-        #+++++++++++++++++++++++++
-        if(BUILD_OMP_TARGETS)
-                 message(STATUS "Adding target ${target_name} to OMP backend. Executable file name: ${target_name}_omp")
-                 add_executable("${target_name}_omp" 
-                 #EXCLUDE_FROM_ALL
-                 "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cpp" )
-                    
-                 set_target_properties( "${target_name}_omp" 
-                  PROPERTIES COMPILE_FLAGS "-DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=OMP ${OpenMP_CXX_FLAGS}")
-                    
-                 target_link_libraries( "${target_name}_omp" ${OpenMP_CXX_LIBRARIES} ${LIBCONFIG_CPP_LIBRARIES})
-                   
-                       
-         endif(BUILD_OMP_TARGETS)
-         
-endfunction(ADD_TARGET)  
+
+  set(cpp_src "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cpp")
+
+  # single-thread host backend (always built)
+  add_executable(${target_name}_cpp ${cpp_src})
+  target_compile_definitions(${target_name}_cpp PRIVATE HYDRA_HOST_SYSTEM=CPP HYDRA_DEVICE_SYSTEM=CPP)
+  target_link_libraries(${target_name}_cpp PkgConfig::LIBCONFIGXX)
+
+  if(TBB_FOUND)
+    add_executable(${target_name}_tbb ${cpp_src})
+    target_compile_definitions(${target_name}_tbb PRIVATE HYDRA_HOST_SYSTEM=CPP HYDRA_DEVICE_SYSTEM=TBB)
+    target_link_libraries(${target_name}_tbb PkgConfig::LIBCONFIGXX TBB::tbb)
+  endif()
+
+  if(OpenMP_CXX_FOUND)
+    add_executable(${target_name}_omp ${cpp_src})
+    target_compile_definitions(${target_name}_omp PRIVATE HYDRA_HOST_SYSTEM=CPP HYDRA_DEVICE_SYSTEM=OMP)
+    target_link_libraries(${target_name}_omp PkgConfig::LIBCONFIGXX OpenMP::OpenMP_CXX)
+  endif()
+
+  if(CUDA_FOUND)
+    cuda_add_executable(${target_name}_cuda "${CMAKE_CURRENT_SOURCE_DIR}/src/${target_name}.cu"
+      OPTIONS -Xcompiler -DHYDRA_HOST_SYSTEM=CPP -DHYDRA_DEVICE_SYSTEM=CUDA)
+    target_link_libraries(${target_name}_cuda PkgConfig::LIBCONFIGXX)
+  endif()
+
+endfunction()

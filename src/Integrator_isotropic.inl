@@ -40,14 +40,13 @@
 
 // THIS LIB
 #include <core/Utils.h>
-#include <core/Types.h>
 #include <core/functions/SgAnisotropic.h>
 #include <core/functions/SgIsotropic.h>
 
 
-declarg(Phi_t,  LDouble)
-declarg(P_t,   LDouble)
-declarg(K_t,   LDouble)
+declarg(Phi_t,  double)
+declarg(P_t,   double)
+declarg(K_t,   double)
 
 using namespace hydra::arguments;
 namespace libconf = libconfig;
