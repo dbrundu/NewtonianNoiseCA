@@ -27,6 +27,8 @@
 #include <hydra/functions/Utils.h>
 #include <hydra/functions/Math.h>
 
+#include <core/functions/CorrelationModels.h>
+
 
 struct SgIsotropicParams
 {
@@ -44,12 +46,18 @@ struct SgIsotropicParams
  *
  *  @class Sg isotropic
  *
+ *  Integrand of Eq. (int) for homogeneous-isotropic turbulence, integrated over
+ *  (phi, p = k_perp/k, k). The space-time temperature correlation h is supplied
+ *  as a policy (see CorrelationModels.h); the default reproduces the Gaussian
+ *  model of the 2022 paper.
+ *
  */
-template< typename ArgTypePhi, typename ArgTypeP, typename ArgTypeK, typename Signature = double(ArgTypePhi, ArgTypeP, ArgTypeK)>
-class SgIsotropic: public hydra::BaseFunctor< SgIsotropic<ArgTypePhi, ArgTypeP, ArgTypeK>, Signature, 5>
+template< typename Corr, typename ArgTypePhi, typename ArgTypeP, typename ArgTypeK,
+          typename Signature = double(ArgTypePhi, ArgTypeP, ArgTypeK)>
+class SgIsotropic: public hydra::BaseFunctor< SgIsotropic<Corr, ArgTypePhi, ArgTypeP, ArgTypeK>, Signature, 5>
 {
 
-    using ThisBaseFunctor = hydra::BaseFunctor< SgIsotropic<ArgTypePhi, ArgTypeP, ArgTypeK>, Signature, 5 >;
+    using ThisBaseFunctor = hydra::BaseFunctor< SgIsotropic<Corr, ArgTypePhi, ArgTypeP, ArgTypeK>, Signature, 5 >;
     using ThisBaseFunctor::_par;
     using Param = hydra::Parameter;
 
@@ -63,39 +71,33 @@ public:
                                     (double)1.0,
                                     (double)1.0,
                                     (double)0.0,
-                                    (double)5.0,
-                                    (double)10.0})
+                                    (double)5.0}),
+                    _corr()
     { }
 
 
-    SgIsotropic( libconfig::Setting const& cfg):
-    ThisBaseFunctor({cfg["omega"],
-                     cfg["alpha"],
-                     cfg["psi"],
-                     cfg["r0"],
-                     cfg["u"]})
-    {}
-
-
-    SgIsotropic( SgIsotropicParams const& params):
+    SgIsotropic( SgIsotropicParams const& params, Corr const& corr = Corr()):
     ThisBaseFunctor({(double)params.omega,
                     (double)params.alpha,
                     (double)params.psi,
                     (double)params.r0,
-                    (double)params.u})
+                    (double)params.u}),
+    _corr(corr)
     {}
 
 
     __hydra_dual__
-    SgIsotropic(SgIsotropic<ArgTypePhi, ArgTypeP, ArgTypeK> const& other):
-        ThisBaseFunctor(other)
+    SgIsotropic(SgIsotropic<Corr, ArgTypePhi, ArgTypeP, ArgTypeK> const& other):
+        ThisBaseFunctor(other),
+        _corr(other._corr)
     {}
 
 
     __hydra_dual__
-    SgIsotropic& operator=( SgIsotropic<ArgTypePhi, ArgTypeP, ArgTypeK> const& other){
+    SgIsotropic& operator=( SgIsotropic<Corr, ArgTypePhi, ArgTypeP, ArgTypeK> const& other){
         if(this == &other) return *this;
         ThisBaseFunctor::operator=(other);
+        _corr = other._corr;
         return *this;
     }
 
@@ -122,23 +124,28 @@ public:
         double r0     = _par[3];
         double u      = _par[4];
 
-        double a = omega - k * u * p * cos(phi-psi);
-
         // k^(-13/3) and k^(-4/3) via a single cube root instead of two std::pow:
-        //   cbrt(k) = k^(1/3)  ->  k^(13/3) = k^4 * cbrt(k),  k^(4/3) = k * cbrt(k)
-        double kc = cbrt(k);
+        //   cbrt(k) = k^(1/3)  ->  k^(13/3) = k^4 * cbrt(k),  k^(2/3) = cbrt(k)^2
+        double kc    = cbrt(k);
+        double tau_k = alpha / (kc*kc);              // eddy turnover time E^{-1/3} k^{-2/3}
+        double kdotU = k * u * p * cos(phi-psi);     // k.U = k_perp U cos(phi-psi)
 
         double r = p / sqrt(1.0 - p*p);
 
         r *= cos(phi)*cos(phi);
         r /= k*k*k*k * kc;
         r *= exp(-2.0 * k * p * r0);
-        r *= exp( -alpha*alpha * a * a / (k * kc) );
+        r *= _corr(omega, kdotU, tau_k, k, u);       // pluggable space-time correlation h
 
         return r;
 
 
     }
+
+
+private:
+
+    Corr _corr;
 
 
 };

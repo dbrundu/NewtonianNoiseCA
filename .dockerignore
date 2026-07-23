@@ -1,0 +1,9 @@
+# The image installs deps + HYDRA only; source is bind-mounted at run time, so
+# keep the build context tiny.
+.git
+build
+build-*
+.deps
+scripts/results
+paper
+*.pdf

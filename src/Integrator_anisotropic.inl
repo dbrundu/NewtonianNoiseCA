@@ -46,9 +46,31 @@
 declarg(X3_t,  double)
 declarg(Z_t,   double)
 declarg(K_t,   double)
+declarg(Phi_t, double)
 
 using namespace hydra::arguments;
 namespace libconf = libconfig;
+
+
+// Selectable space-time correlation model h in Eq. (S_g PBL). "analytic" uses
+// the fast 3D closed-form top-hat azimuthal integral (SgAnisotropic); the other
+// members keep the azimuthal integral explicit and evaluate a pluggable h in 4D
+// (SgAnisotropicH). Running "tophat" (4D numerical) against "analytic" (3D
+// closed form) is the correctness cross-check.
+enum HModel { H_ANALYTIC, H_GAUSSIAN, H_TOPHAT, H_SWEEPING, H_ELLIPTIC, H_EXPONENTIAL };
+
+
+// Integrate one frequency point with the 4D general-h PBL integrand. Returns the
+// VEGAS estimate and its absolute error.
+template<class Corr>
+std::pair<double,double> integrate_aniso(SgAnisotropicParams const& par, Corr const& corr,
+                       hydra::VegasState<4, hydra::device::sys_t>& state)
+{
+    auto integrand = SgAnisotropicH<Corr, X3_t, Z_t, K_t, Phi_t>(par, corr);
+    auto vegas     = hydra::Vegas<4, hydra::device::sys_t>(state);
+    auto r         = vegas.Integrate(integrand);
+    return { r.first, r.second };
+}
 
 
 int main(int argc, char** argv)
@@ -86,7 +108,6 @@ int main(int argc, char** argv)
 
 
     // constants
-    constexpr size_t Ndim   = 3;
     constexpr double G      = 6.67e-11;
     constexpr double rho0   = 1.225;
     constexpr double L      = 1E4;
@@ -120,43 +141,96 @@ int main(int argc, char** argv)
     int    Npoints   = (int)    cfg_root["Npoints"];
 
 
-    //integration region limits
-    double  min[Ndim]   = { par.delta , min_z , min_k };
-    double  max[Ndim]   = { max_x3,     max_z,  max_k  };
+    // space-time correlation model (WP-A1) + humidity enhancement (WP-A2).
+    // Optional -> old configs default to the analytic top-hat of the 2022 paper.
+    std::string h_model = "analytic";
+    double sigma_U      = 1.5;   // sweeping model:  sigma_U ~ u_*
+    double beta_sw      = 0.0;   // elliptic model:  V_c / U_c
+    double cTv2_ratio   = 1.0;   // humidity:  c_Tv^2 / c_T^2
+    double min_phi      = 0.0;
+    double max_phi      = 2.0*M_PI;
+    bool   omega_log    = false; // log-spaced frequency sweep (default: linear)
+    cfg_root.lookupValue("h_model",    h_model);
+    cfg_root.lookupValue("sigma_U",    sigma_U);
+    cfg_root.lookupValue("beta_sw",    beta_sw);
+    cfg_root.lookupValue("cTv2_ratio", cTv2_ratio);
+    cfg_root.lookupValue("min_phi",    min_phi);
+    cfg_root.lookupValue("max_phi",    max_phi);
+    cfg_root.lookupValue("omega_log",  omega_log);
+
+    HModel hmod;
+    if      (h_model == "analytic")    hmod = H_ANALYTIC;
+    else if (h_model == "gaussian")    hmod = H_GAUSSIAN;
+    else if (h_model == "tophat")      hmod = H_TOPHAT;
+    else if (h_model == "sweeping")    hmod = H_SWEEPING;
+    else if (h_model == "elliptic")    hmod = H_ELLIPTIC;
+    else if (h_model == "exponential") hmod = H_EXPONENTIAL;
+    else {
+        std::cerr << "Unknown h_model '" << h_model
+                  << "' (expected analytic|gaussian|tophat|sweeping|elliptic|exponential)" << std::endl;
+        return 1;
+    }
+    std::cerr << "# h_model=" << h_model << "  cTv2_ratio=" << cTv2_ratio << std::endl;
 
 
-    // Vegas integrator state
-    auto integrator = hydra::VegasState<Ndim,  hydra::device::sys_t>(min,max);
-    integrator.SetAlpha(1.5);
-    integrator.SetIterations( Niterations );
-    integrator.SetUseRelativeError(1);
-    integrator.SetMaxError( MaxError );
-    integrator.SetCalls( Ncalls );
-    integrator.SetNDimensions(Ndim);
-    integrator.SetMode(-1);
-    integrator.SetTrainingCalls( 50000/10 );
-    integrator.SetTrainingIterations( Niterations );
+    // Vegas integrator states: 3D for the analytic top-hat path, 4D (adds the
+    // azimuthal angle phi) for the pluggable-h path.
+    double  min3[3]   = { par.delta , min_z , min_k };
+    double  max3[3]   = { max_x3,     max_z,  max_k  };
+    double  min4[4]   = { par.delta , min_z , min_k , min_phi };
+    double  max4[4]   = { max_x3,     max_z,  max_k , max_phi };
+
+    auto integ3 = hydra::VegasState<3, hydra::device::sys_t>(min3, max3);
+    auto integ4 = hydra::VegasState<4, hydra::device::sys_t>(min4, max4);
+
+    auto configure = [&](auto& st, int nd){
+        st.SetAlpha(1.5);
+        st.SetIterations( Niterations );
+        st.SetUseRelativeError(1);
+        st.SetMaxError( MaxError );
+        st.SetCalls( Ncalls );
+        st.SetNDimensions(nd);
+        st.SetMode(-1);
+        st.SetTrainingCalls( 50000/10 );
+        st.SetTrainingIterations( Niterations );
+    };
+    configure(integ3, 3);
+    configure(integ4, 4);
 
 
+    std::cout << "# f[Hz]\tsqrt_Sh[1/sqrtHz]\trel_err\n";
     for(int i=0; i<Npoints; ++i){
 
-        double omega = omega_min + i * (omega_max-omega_min)/(Npoints-1.0);
+        double omega;
+        if      (Npoints <= 1) omega = omega_min;
+        else if (omega_log)    omega = omega_min * pow(omega_max/omega_min, i/(Npoints-1.0));
+        else                   omega = omega_min + i*(omega_max-omega_min)/(Npoints-1.0);
+
         par.omega = omega;
 
         double scale  = G * rho0 / (omega * omega * L * T0);
         scale *= scale;
+        scale *= cTv2_ratio;                 // virtual-temperature (humidity) enhancement
 
-        // Integrand
-        auto integrand = SgAnisotropic<X3_t, Z_t, K_t>(par);
+        std::pair<double,double> res(0.0, 0.0);
+        switch(hmod) {
+            case H_ANALYTIC: {
+                auto integrand = SgAnisotropic<X3_t, Z_t, K_t>(par);
+                auto vegas     = hydra::Vegas<3, hydra::device::sys_t>(integ3);
+                auto rr        = vegas.Integrate(integrand);
+                res            = { rr.first, rr.second };
+                break;
+            }
+            case H_GAUSSIAN:    res = integrate_aniso(par, CorrGaussian{},       integ4); break;
+            case H_TOPHAT:      res = integrate_aniso(par, CorrTophat{},         integ4); break;
+            case H_SWEEPING:    res = integrate_aniso(par, CorrSweeping{sigma_U}, integ4); break;
+            case H_ELLIPTIC:    res = integrate_aniso(par, CorrElliptic{beta_sw}, integ4); break;
+            case H_EXPONENTIAL: res = integrate_aniso(par, CorrExponential{},     integ4); break;
+        }
 
-        auto Vegas_d = hydra::Vegas< Ndim,  hydra::device::sys_t >(integrator);
-
-        auto result  = Vegas_d.Integrate(integrand);
-
-
-        // Integral
-
-        std::cout << sqrt(scale*result.first) << std::endl;
+        double sqrtSh = sqrt(scale*res.first);
+        double relerr = (res.first > 0.0) ? 0.5*res.second/res.first : 0.0;  // sqrt halves rel. error
+        std::cout << omega/(2*M_PI) << '\t' << sqrtSh << '\t' << relerr << std::endl;
 
     }
 

@@ -52,6 +52,24 @@ using namespace hydra::arguments;
 namespace libconf = libconfig;
 
 
+// Selectable space-time correlation model (the function h in Eq. (int)).
+enum HModel { H_GAUSSIAN, H_TOPHAT, H_SWEEPING, H_ELLIPTIC, H_EXPONENTIAL };
+
+
+// Integrate one frequency point for a given correlation policy Corr. Returns the
+// VEGAS estimate and its absolute error. Kept as a template so the pluggable h
+// is a compile-time plug behind a run-time switch.
+template<class Corr>
+std::pair<double,double> integrate_isotropic(SgIsotropicParams const& par, Corr const& corr,
+                           hydra::VegasState<3, hydra::device::sys_t>& state)
+{
+    auto integrand = SgIsotropic<Corr, Phi_t, P_t, K_t>(par, corr);
+    auto vegas     = hydra::Vegas<3, hydra::device::sys_t>(state);
+    auto r         = vegas.Integrate(integrand);
+    return { r.first, r.second };
+}
+
+
 int main(int argc, char** argv)
 {
 
@@ -122,6 +140,33 @@ int main(int argc, char** argv)
     int    Npoints   = (int)    cfg_root["Npoints"];
 
 
+    // space-time correlation model (WP-A1) and virtual-temperature/humidity
+    // enhancement c_Tv^2/c_T^2 (WP-A2). All optional -> old configs still work.
+    std::string h_model = "gaussian";
+    double sigma_U      = 1.5;   // sweeping model:  sigma_U ~ u_*
+    double beta_sw      = 0.0;   // elliptic model:  V_c / U_c  (0 = Gaussian)
+    double cTv2_ratio   = 1.0;   // humidity:  c_Tv^2 / c_T^2   (1 = dry air)
+    bool   omega_log    = false; // log-spaced frequency sweep (default: linear)
+    cfg_root.lookupValue("h_model",    h_model);
+    cfg_root.lookupValue("sigma_U",    sigma_U);
+    cfg_root.lookupValue("beta_sw",    beta_sw);
+    cfg_root.lookupValue("cTv2_ratio", cTv2_ratio);
+    cfg_root.lookupValue("omega_log",  omega_log);
+
+    HModel hmod;
+    if      (h_model == "gaussian")    hmod = H_GAUSSIAN;
+    else if (h_model == "tophat")      hmod = H_TOPHAT;
+    else if (h_model == "sweeping")    hmod = H_SWEEPING;
+    else if (h_model == "elliptic")    hmod = H_ELLIPTIC;
+    else if (h_model == "exponential") hmod = H_EXPONENTIAL;
+    else {
+        std::cerr << "Unknown h_model '" << h_model
+                  << "' (expected gaussian|tophat|sweeping|elliptic|exponential)" << std::endl;
+        return 1;
+    }
+    std::cerr << "# h_model=" << h_model << "  cTv2_ratio=" << cTv2_ratio << std::endl;
+
+
     //integration region limits
     double  min[Ndim]   = { min_phi , min_p , min_k };
     double  max[Ndim]   = { max_phi,  max_p,  max_k };
@@ -140,28 +185,35 @@ int main(int argc, char** argv)
     integrator.SetTrainingIterations( Niterations );
 
 
+    std::cout << "# f[Hz]\tsqrt_Sh[1/sqrtHz]\trel_err\n";
     for(int i=0; i<Npoints; ++i)
     {
-        double omega_step = (omega_max-omega_min)/(Npoints-1.0);
-        double omega      = omega_min + i*omega_step;
+        double omega;
+        if      (Npoints <= 1) omega = omega_min;
+        else if (omega_log)    omega = omega_min * pow(omega_max/omega_min, i/(Npoints-1.0));
+        else                   omega = omega_min + i*(omega_max-omega_min)/(Npoints-1.0);
 
         par.omega = omega;
 
         double scale = sqrt(0.2) * G * rho0;
         scale /= (omega*omega* L * T0);
         scale *= scale;
+        scale *= cTv2_ratio;                 // virtual-temperature (humidity) enhancement
 
 
-        // Integrand
-        auto integrand = SgIsotropic<Phi_t, P_t, K_t>(par);
+        // Integral with the selected space-time correlation model
+        std::pair<double,double> res(0.0, 0.0);
+        switch(hmod) {
+            case H_GAUSSIAN:    res = integrate_isotropic(par, CorrGaussian{},       integrator); break;
+            case H_TOPHAT:      res = integrate_isotropic(par, CorrTophat{},         integrator); break;
+            case H_SWEEPING:    res = integrate_isotropic(par, CorrSweeping{sigma_U}, integrator); break;
+            case H_ELLIPTIC:    res = integrate_isotropic(par, CorrElliptic{beta_sw}, integrator); break;
+            case H_EXPONENTIAL: res = integrate_isotropic(par, CorrExponential{},     integrator); break;
+        }
 
-
-        // Integral
-        auto Vegas_d = hydra::Vegas< Ndim,  hydra::device::sys_t >(integrator);
-
-        auto result  = Vegas_d.Integrate(integrand);
-
-        std::cout << sqrt(scale*result.first) << std::endl;
+        double sqrtSh = sqrt(scale*res.first);
+        double relerr = (res.first > 0.0) ? 0.5*res.second/res.first : 0.0;  // sqrt halves rel. error
+        std::cout << omega/(2*M_PI) << '\t' << sqrtSh << '\t' << relerr << std::endl;
     }
 
     return 0;

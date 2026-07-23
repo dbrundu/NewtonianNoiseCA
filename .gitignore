@@ -34,3 +34,6 @@ dev/*
 
 # LargeDataFiles
 *.root
+
+# generated scan/plot outputs
+scripts/results/

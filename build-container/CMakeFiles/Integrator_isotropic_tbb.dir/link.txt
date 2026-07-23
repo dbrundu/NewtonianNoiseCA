@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/Integrator_isotropic_tbb.dir/src/Integrator_isotropic.cpp.o -o Integrator_isotropic_tbb  /usr/lib/x86_64-linux-gnu/libtbb.so.12.11 /usr/lib/x86_64-linux-gnu/libconfig++.so 

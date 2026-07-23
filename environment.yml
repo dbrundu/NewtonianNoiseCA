@@ -1,0 +1,27 @@
+# No-sudo, no-container toolchain via conda/mamba (installs into your home dir).
+# Use this if you cannot get a container engine and the workstation lacks the
+# build dependencies system-wide.
+#
+#   # one-time, no root: get micromamba into your home
+#   curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba
+#   ./bin/micromamba create -y -f environment.yml
+#   eval "$(./bin/micromamba shell hook -s bash)" && micromamba activate nn
+#   ./run.sh
+#
+# The cxx-compiler package sets $CXX to the conda g++ on activation; conda also
+# sets CMAKE_PREFIX_PATH / PKG_CONFIG_PATH so CMake finds TBB, libconfig, TCLAP.
+name: nn
+channels:
+  - conda-forge
+dependencies:
+  - cxx-compiler        # conda-forge g++ (C++20), sets $CXX/$CC on activate
+  - cmake
+  - make
+  - pkg-config
+  - git
+  - tbb-devel           # ships TBBConfig.cmake (find_package(TBB CONFIG))
+  - libconfig           # libconfig++ + pkg-config file
+  - tclap               # header-only
+  - python>=3.10
+  - matplotlib-base
+  - numpy
